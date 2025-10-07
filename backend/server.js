@@ -7,7 +7,7 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const Tesseract = require("tesseract.js");
 const dayjs = require("dayjs");
-const pdf = require("pdf-parse");
+const { PDFExtract } = require("pdf.js-extract");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const path = require("path");
 
@@ -297,8 +297,12 @@ app.post(
 
     try {
       const dataBuffer = req.file.buffer;
-      const pdfData = await pdf(dataBuffer);
-      const text = pdfData.text;
+
+      const pdfExtract = new PDFExtract();
+      const data = await pdfExtract.extractBuffer(dataBuffer, {});
+      const text = data.pages
+        .map((page) => page.content.map((item) => item.str).join(" "))
+        .join("\n");
 
       let defaultCategory = await Category.findOne({
         where: { UserId: req.user.id, type: "expense" },
