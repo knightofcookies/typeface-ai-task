@@ -1,11 +1,26 @@
-import React from "react";
-import { AppBar, Toolbar, Typography, Button, Box } from "@mui/material";
+import React, { useContext } from "react";
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  Button,
+  Box,
+  IconButton,
+} from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "@mui/material/styles";
+import { ThemeContext } from "../context/ThemeContext";
+
+// Import icons
+import Brightness4Icon from "@mui/icons-material/Brightness4";
+import Brightness7Icon from "@mui/icons-material/Brightness7";
 
 export default function Navbar() {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const { toggleColorMode } = useContext(ThemeContext);
 
   const handleLogout = () => {
     logout();
@@ -27,7 +42,7 @@ export default function Navbar() {
         >
           Finance Assistant
         </Typography>
-        <Box>
+        <Box sx={{ display: "flex", alignItems: "center" }}>
           <Button color="inherit" component={Link} to="/dashboard">
             Dashboard
           </Button>
@@ -37,6 +52,14 @@ export default function Navbar() {
           <Button color="inherit" onClick={handleLogout}>
             Logout
           </Button>
+
+          <IconButton sx={{ ml: 1 }} onClick={toggleColorMode} color="inherit">
+            {theme.palette.mode === "dark" ? (
+              <Brightness7Icon />
+            ) : (
+              <Brightness4Icon />
+            )}
+          </IconButton>
         </Box>
       </Toolbar>
     </AppBar>

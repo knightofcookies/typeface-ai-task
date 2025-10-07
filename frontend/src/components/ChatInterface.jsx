@@ -1,58 +1,125 @@
-// components/ChatInterface.jsx
-import { useState } from 'react';
-import { Box, TextField, Button, Paper, Typography, CircularProgress } from '@mui/material';
-import ReactMarkdown from 'react-markdown';
-import { postAiChat } from '../api'; 
+import { useState } from "react";
+import {
+  Box,
+  TextField,
+  Button,
+  Paper,
+  Typography,
+  CircularProgress,
+  IconButton,
+} from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
+import ReactMarkdown from "react-markdown";
+import { postAiChat } from "../api";
 
+export default function ChatInterface({ onClose }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-export default function ChatInterface() {
-    const [messages, setMessages] = useState([]);
-    const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+  const handleSend = async () => {
+    if (!input.trim()) return;
 
-    // In components/ChatInterface.jsx
-    const handleSend = async () => {
-        if (!input.trim()) return;
+    const userMessage = { sender: "user", text: input };
+    setMessages((prevMessages) => [...prevMessages, userMessage]);
+    setInput("");
+    setIsLoading(true);
 
-        const messageToSend = input;
-        const userMessage = { sender: 'user', text: messageToSend };
+    try {
+      const { data } = await postAiChat(userMessage.text);
+      const aiMessage = { sender: "ai", text: data.response };
+      setMessages((prevMessages) => [...prevMessages, aiMessage]);
+    } catch (error) {
+      console.error("AI chat failed:", error);
+      const errorMessage = {
+        sender: "ai",
+        text: "Sorry, I ran into an error.",
+      };
+      setMessages((prevMessages) => [...prevMessages, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-        // Update the UI optimistically with the user's message
-        setMessages(prevMessages => [...prevMessages, userMessage]); 
-        setInput('');
-        setIsLoading(true);
+  return (
+    <Paper
+      elevation={3}
+      sx={{
+        height: "500px",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <Box
+        sx={{
+          p: 2,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <Typography variant="h6" component="div">
+          AI Assistant
+        </Typography>
+        <IconButton onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </Box>
 
-        try {
-            const { data } = await postAiChat(messageToSend);
-            const aiMessage = { sender: 'ai', text: data.response };
-            // Now, append the AI's message to the list
-            setMessages(prevMessages => [...prevMessages, aiMessage]);
-        } catch (error) {
-            console.error("AI chat failed:", error);
-            const errorMessage = { sender: 'ai', text: 'Sorry, I ran into an error.' };
-            // Append an error message instead of the AI response
-            setMessages(prevMessages => [...prevMessages, errorMessage]);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+      <Box sx={{ flexGrow: 1, overflowY: "auto", p: 2 }}>
+        {messages.map((msg, index) => (
+          <Box
+            key={index}
+            sx={{ textAlign: msg.sender === "user" ? "right" : "left", my: 1 }}
+          >
+            <Typography
+              variant="body1"
+              component="div"
+              sx={{
+                display: "inline-block",
+                p: 1,
+                borderRadius: 1,
+                bgcolor:
+                  msg.sender === "user" ? "primary.main" : "action.hover",
+                color:
+                  msg.sender === "user"
+                    ? "primary.contrastText"
+                    : "text.primary",
+              }}
+            >
+              <ReactMarkdown>{msg.text}</ReactMarkdown>
+            </Typography>
+          </Box>
+        ))}
+        {isLoading && (
+          <Box sx={{ display: "flex", justifyContent: "center", p: 1 }}>
+            <CircularProgress size={24} />
+          </Box>
+        )}
+      </Box>
 
-    return (
-        <Paper elevation={3} sx={{ p: 2, height: '400px', display: 'flex', flexDirection: 'column' }}>
-            <Box sx={{ flexGrow: 1, overflowY: 'auto', mb: 2 }}>
-                {messages.map((msg, index) => (
-                    <Box key={index} sx={{ textAlign: msg.sender === 'user' ? 'right' : 'left', my: 1 }}>
-                        <Typography variant="body1" component="div" sx={{ display: 'inline-block', p: 1, borderRadius: 1, bgcolor: msg.sender === 'user' ? 'primary.main' : 'grey.300', color: msg.sender === 'user' ? 'white' : 'black' }}>
-                            <ReactMarkdown>{msg.text}</ReactMarkdown>
-                        </Typography>
-                    </Box>
-                ))}
-                {isLoading && <CircularProgress size={24} />}
-            </Box>
-            <Box sx={{ display: 'flex' }}>
-                <TextField fullWidth value={input} onChange={(e) => setInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSend()} placeholder="Ask about your spending..." />
-                <Button onClick={handleSend} disabled={isLoading}>Send</Button>
-            </Box>
-        </Paper>
-    );
+      <Box
+        sx={{
+          display: "flex",
+          p: 2,
+          borderTop: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <TextField
+          fullWidth
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyPress={(e) => e.key === "Enter" && handleSend()}
+          placeholder="Ask about your spending..."
+          size="small"
+        />
+        <Button onClick={handleSend} disabled={isLoading} sx={{ ml: 1 }}>
+          Send
+        </Button>
+      </Box>
+    </Paper>
+  );
 }

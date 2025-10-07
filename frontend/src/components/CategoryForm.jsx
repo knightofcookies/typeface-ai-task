@@ -1,5 +1,3 @@
-// src/components/CategoryForm.jsx
-
 import React, { useState } from "react";
 import {
   Modal,
@@ -29,11 +27,11 @@ const style = {
 export default function CategoryForm({ open, onClose, onSuccess }) {
   const [name, setName] = useState("");
   const [type, setType] = useState("expense");
-  const [error, setError] = useState(""); // <-- Add state for error messages
+  const [error, setError] = useState("");
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setError(""); // <-- Clear previous errors
+    setError("");
     if (!name || !type) {
       alert("Please fill out all fields.");
       return;
@@ -45,14 +43,12 @@ export default function CategoryForm({ open, onClose, onSuccess }) {
       setName("");
       setType("expense");
     } catch (err) {
-      // --- UPDATE THIS CATCH BLOCK ---
       if (err.response && err.response.data && err.response.data.message) {
-        setError(err.response.data.message); // Set specific error from backend
+        setError(err.response.data.message);
       } else {
-        setError("Failed to create category. Please try again."); // Fallback error
+        setError("Failed to create category. Please try again.");
       }
       console.error("Failed to create category", err);
-      // -------------------------------
     }
   };
 
@@ -63,7 +59,6 @@ export default function CategoryForm({ open, onClose, onSuccess }) {
           Add New Category
         </Typography>
 
-        {/* --- ADD THIS TO DISPLAY THE ERROR --- */}
         {error && (
           <Typography color="error" sx={{ mt: 2 }}>
             {error}

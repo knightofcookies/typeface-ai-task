@@ -1,33 +1,24 @@
-// =================================================================
-// 1. IMPORTS & INITIALIZATION
-// =================================================================
-require('dotenv').config();
+require("dotenv").config();
 const express = require("express");
 const { Sequelize, DataTypes, Op } = require("sequelize");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const multer = require("multer");
-const Tesseract = require("tesseract.js"); // <-- IMPORT TESSERACT.JS
-const dayjs = require('dayjs');
-const pdf = require('pdf-parse'); // Add this import at the top of server.js
-const { GoogleGenerativeAI } = require("@google/generative-ai"); // <-- ADD THIS
+const Tesseract = require("tesseract.js");
+const dayjs = require("dayjs");
+const pdf = require("pdf-parse");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = "yuduyhg84478937836rydsegf7fiuydgew3887";
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); // <-- ADD THIS
+const JWT_SECRET = process.env.JWT_SECRET;
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Middleware setup
 app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());
 
-// =================================================================
-// 2. DATABASE (SEQUELIZE) SETUP
-// =================================================================
 const sequelize = new Sequelize("sqlite://money.db");
-
-// --- Define Models ---
 
 const User = sequelize.define("User", {
   email: {
@@ -75,7 +66,6 @@ const Transaction = sequelize.define("Transaction", {
   transactionDate: { type: DataTypes.DATEONLY, allowNull: false },
 });
 
-// --- Define Associations ---
 User.hasMany(Transaction);
 Transaction.belongsTo(User);
 
@@ -85,9 +75,6 @@ Category.belongsTo(User);
 Category.hasMany(Transaction);
 Transaction.belongsTo(Category);
 
-// =================================================================
-// 3. AUTHENTICATION MIDDLEWARE
-// =================================================================
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -107,13 +94,8 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// =================================================================
-// 4. API ROUTES
-// =================================================================
-
 const upload = multer({ storage: multer.memoryStorage() });
 
-// --- Auth Routes (unchanged) ---
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -150,7 +132,6 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// --- Category and Transaction Routes (unchanged) ---
 app.post("/api/categories", authenticateToken, async (req, res) => {
   try {
     const { name, type } = req.body;
@@ -178,6 +159,75 @@ app.get("/api/categories", authenticateToken, async (req, res) => {
     res
       .status(500)
       .json({ message: "Error fetching categories", error: error.message });
+  }
+});
+
+app.put("/api/categories/:id", authenticateToken, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const category = await Category.findOne({
+      where: { id: req.params.id, UserId: req.user.id },
+    });
+
+    if (!category) {
+      return res.status(404).json({
+        message: "Category not found or you don't have permission to edit it.",
+      });
+    }
+
+    const existingCategory = await Category.findOne({
+      where: {
+        name,
+        UserId: req.user.id,
+        id: { [Op.ne]: req.params.id },
+      },
+    });
+
+    if (existingCategory) {
+      return res
+        .status(409)
+        .json({ message: "A category with this name already exists." });
+    }
+
+    category.name = name;
+    await category.save();
+    res.json(category);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error updating category", error: error.message });
+  }
+});
+
+app.delete("/api/categories/:id", authenticateToken, async (req, res) => {
+  try {
+    const category = await Category.findOne({
+      where: { id: req.params.id, UserId: req.user.id },
+    });
+
+    if (!category) {
+      return res.status(404).json({
+        message:
+          "Category not found or you don't have permission to delete it.",
+      });
+    }
+
+    const transactionCount = await Transaction.count({
+      where: { CategoryId: req.params.id },
+    });
+
+    if (transactionCount > 0) {
+      return res.status(409).json({
+        message: `Cannot delete category. It is associated with ${transactionCount} transaction(s). Please re-assign them first.`,
+      });
+    }
+
+    await category.destroy();
+    res.status(204).send();
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error deleting category", error: error.message });
   }
 });
 
@@ -235,302 +285,179 @@ app.get("/api/transactions", authenticateToken, async (req, res) => {
   }
 });
 
-// In server.js, add this code block in section #4 (API ROUTES),
-// perhaps near your other transaction routes.
-
-// app.post("/api/transactions/upload-pdf", authenticateToken, upload.single('file'), async (req, res) => {
-//     if (!req.file) {
-//         return res.status(400).json({ error: 'No PDF file uploaded.' });
-//     }
-
-//     try {
-//         const dataBuffer = req.file.buffer;
-//         const pdfData = await pdf(dataBuffer);
-//         const text = pdfData.text;
-
-//         const lines = text.split('\n');
-//         const transactionsToCreate = [];
-//         let importedCount = 0;
-//         let duplicateCount = 0;
-        
-//         // This regex is an EXAMPLE for a bank statement. You may need to adjust it.
-//         // It looks for a date, a description, and a withdrawal/debit amount.
-//         const transactionRegex = /(\d{2}\/\d{2}\/\d{4})\s+(.*?)\s+([\d,]+\.\d{2})/;
-
-//         for (const line of lines) {
-//             const match = line.match(transactionRegex);
-//             if (match) {
-//                 const [_, dateStr, description, amountStr] = match;
-                
-//                 const date = dayjs(dateStr, 'MM/DD/YYYY').format('YYYY-MM-DD');
-//                 const amount = parseFloat(amountStr.replace(/,/g, ''));
-//                 const trimmedDesc = description.trim();
-
-//                 // Simple duplicate check
-//                 const existing = await Transaction.findOne({
-//                     where: { UserId: req.user.id, transactionDate: date, amount, description: trimmedDesc }
-//                 });
-
-//                 if (!existing) {
-//                     transactionsToCreate.push({
-//                         transactionDate: date,
-//                         description: trimmedDesc,
-//                         amount,
-//                         // You'll need a way to assign categories. Defaulting is simplest.
-//                         CategoryId: 1, // You MUST have a category with ID 1, or handle this better.
-//                         UserId: req.user.id,
-//                     });
-//                     importedCount++;
-//                 } else {
-//                     duplicateCount++;
-//                 }
-//             }
-//         }
-        
-//         if (transactionsToCreate.length > 0) {
-//             await Transaction.bulkCreate(transactionsToCreate);
-//         }
-
-//         res.status(201).json({ 
-//             message: 'PDF processed.',
-//             imported: importedCount,
-//             duplicates: duplicateCount 
-//         });
-
-//     } catch (error) {
-//         console.error('PDF parsing error:', error);
-//         res.status(500).json({ error: 'Failed to parse PDF.' });
-//     }
-// });
-
-// =================================================================
-// 5. OCR IMPLEMENTATION AND HELPERS
-// =================================================================
-
-
-// In server.js, REPLACE your entire app.post("/api/transactions/upload-pdf", ...) route with this:
-
-app.post("/api/transactions/upload-pdf", authenticateToken, upload.single('file'), async (req, res) => {
+app.post(
+  "/api/transactions/upload-pdf",
+  authenticateToken,
+  upload.single("file"),
+  async (req, res) => {
     if (!req.file) {
-        return res.status(400).json({ error: 'No PDF file uploaded.' });
+      return res.status(400).json({ error: "No PDF file uploaded." });
     }
 
     try {
-        const dataBuffer = req.file.buffer;
-        const pdfData = await pdf(dataBuffer);
-        const text = pdfData.text;
+      const dataBuffer = req.file.buffer;
+      const pdfData = await pdf(dataBuffer);
+      const text = pdfData.text;
 
-        // --- FIX #2: ROBUST CATEGORY HANDLING ---
-        // Find the user's first expense category, or create a default one.
-        let defaultCategory = await Category.findOne({
-            where: { UserId: req.user.id, type: 'expense' }
+      let defaultCategory = await Category.findOne({
+        where: { UserId: req.user.id, type: "expense" },
+      });
+
+      if (!defaultCategory) {
+        defaultCategory = await Category.create({
+          name: "Uncategorized",
+          type: "expense",
+          UserId: req.user.id,
         });
-        
-        if (!defaultCategory) {
-            defaultCategory = await Category.create({
-                name: 'Uncategorized',
-                type: 'expense',
-                UserId: req.user.id
+      }
+      const defaultCategoryId = defaultCategory.id;
+
+      const lines = text.split("\n");
+      const transactionsToCreate = [];
+      let importedCount = 0;
+      let duplicateCount = 0;
+
+      const transactionRegex =
+        /(\d{2}\/\d{2}\/\d{4})\s+(.*?)\s+([\d,]+\.\d{2})/;
+
+      for (const line of lines) {
+        const match = line.match(transactionRegex);
+        if (match) {
+          const [_, dateStr, description, amountStr] = match;
+
+          const customParseFormat = require("dayjs/plugin/customParseFormat");
+          dayjs.extend(customParseFormat);
+          const date = dayjs(dateStr, "MM/DD/YYYY").format("YYYY-MM-DD");
+
+          const amount = parseFloat(amountStr.replace(/,/g, ""));
+          const trimmedDesc = description.trim();
+
+          const existing = await Transaction.findOne({
+            where: {
+              UserId: req.user.id,
+              transactionDate: date,
+              amount,
+              description: trimmedDesc,
+            },
+          });
+
+          if (!existing) {
+            transactionsToCreate.push({
+              transactionDate: date,
+              description: trimmedDesc,
+              amount,
+              CategoryId: defaultCategoryId,
+              UserId: req.user.id,
             });
+            importedCount++;
+          } else {
+            duplicateCount++;
+          }
         }
-        const defaultCategoryId = defaultCategory.id;
-        // ----------------------------------------
+      }
 
-        const lines = text.split('\n');
-        const transactionsToCreate = [];
-        let importedCount = 0;
-        let duplicateCount = 0;
-        
-        const transactionRegex = /(\d{2}\/\d{2}\/\d{4})\s+(.*?)\s+([\d,]+\.\d{2})/;
+      if (transactionsToCreate.length > 0) {
+        await Transaction.bulkCreate(transactionsToCreate);
+      }
 
-        for (const line of lines) {
-            const match = line.match(transactionRegex);
-            if (match) {
-                const [_, dateStr, description, amountStr] = match;
-                
-                // --- FIX #1: DAYJS IS NOW AVAILABLE ---
-                // Custom parsing is needed because dayjs needs a hint for MM/DD/YYYY
-                const customParseFormat = require('dayjs/plugin/customParseFormat');
-                dayjs.extend(customParseFormat);
-                const date = dayjs(dateStr, 'MM/DD/YYYY').format('YYYY-MM-DD');
-                // ----------------------------------------
-
-                const amount = parseFloat(amountStr.replace(/,/g, ''));
-                const trimmedDesc = description.trim();
-
-                const existing = await Transaction.findOne({
-                    where: { UserId: req.user.id, transactionDate: date, amount, description: trimmedDesc }
-                });
-
-                if (!existing) {
-                    transactionsToCreate.push({
-                        transactionDate: date,
-                        description: trimmedDesc,
-                        amount,
-                        CategoryId: defaultCategoryId, // Use the safe, robust category ID
-                        UserId: req.user.id,
-                    });
-                    importedCount++;
-                } else {
-                    duplicateCount++;
-                }
-            }
-        }
-        
-        if (transactionsToCreate.length > 0) {
-            await Transaction.bulkCreate(transactionsToCreate);
-        }
-
-        res.status(201).json({ 
-            message: 'PDF processed successfully.',
-            imported: importedCount,
-            duplicates: duplicateCount 
-        });
-
+      res.status(201).json({
+        message: "PDF processed successfully.",
+        imported: importedCount,
+        duplicates: duplicateCount,
+      });
     } catch (error) {
-        console.error('PDF parsing error:', error);
-        res.status(500).json({ error: 'Failed to parse PDF.' });
+      console.error("PDF parsing error:", error);
+      res.status(500).json({ error: "Failed to parse PDF." });
     }
+  },
+);
+
+app.put("/api/transactions/:id", authenticateToken, async (req, res) => {
+  try {
+    const { description, amount, transactionDate, categoryId } = req.body;
+    const transaction = await Transaction.findOne({
+      where: { id: req.params.id, UserId: req.user.id },
+    });
+
+    if (!transaction) {
+      return res.status(404).json({
+        message:
+          "Transaction not found or you do not have permission to edit it.",
+      });
+    }
+
+    await transaction.update({
+      description,
+      amount,
+      transactionDate,
+      CategoryId: categoryId,
+    });
+
+    res.json(transaction);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error updating transaction", error: error.message });
+  }
 });
 
-// Add these two new routes to your API ROUTES section in server.js
+app.delete("/api/transactions/:id", authenticateToken, async (req, res) => {
+  try {
+    const transaction = await Transaction.findOne({
+      where: { id: req.params.id, UserId: req.user.id },
+    });
 
-// In backend/server.js
-// Find your PUT and DELETE routes and REPLACE them with these.
-
-// UPDATE a transaction
-app.put('/api/transactions/:id', authenticateToken, async (req, res) => {
-    try {
-        const { description, amount, transactionDate, categoryId } = req.body;
-        // Ensure you're finding by the PRIMARY KEY and also the USER ID for security
-        const transaction = await Transaction.findOne({
-            where: { id: req.params.id, UserId: req.user.id }
-        });
-
-        if (!transaction) {
-            return res.status(404).json({ message: 'Transaction not found or you do not have permission to edit it.' });
-        }
-
-        // Use the .update() method for clarity
-        await transaction.update({
-            description,
-            amount,
-            transactionDate,
-            CategoryId: categoryId,
-        });
-
-        res.json(transaction);
-    } catch (error) {
-        res.status(500).json({ message: 'Error updating transaction', error: error.message });
+    if (!transaction) {
+      return res.status(404).json({
+        message:
+          "Transaction not found or you do not have permission to delete it.",
+      });
     }
+
+    await transaction.destroy();
+    res.status(204).send();
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error deleting transaction", error: error.message });
+  }
 });
 
-// DELETE a transaction
-app.delete('/api/transactions/:id', authenticateToken, async (req, res) => {
-    try {
-        const transaction = await Transaction.findOne({
-            where: { id: req.params.id, UserId: req.user.id }
-        });
-
-        if (!transaction) {
-            return res.status(404).json({ message: 'Transaction not found or you do not have permission to delete it.' });
-        }
-
-        await transaction.destroy();
-        res.status(204).send(); // Send a 204 No Content response
-    } catch (error) {
-        res.status(500).json({ message: 'Error deleting transaction', error: error.message });
-    }
-});
-
-// --- NEW: AI Financial Coach Route ---
-// app.post("/api/ai/chat", authenticateToken, async (req, res) => {
-//     const { query } = req.body;
-//     if (!query) {
-//         return res.status(400).json({ error: "Query is required." });
-//     }
-//     const userId = req.user.id;
-
-//     try {
-//         // Step 1: Retrieve relevant transactions from YOUR database (The "R" in RAG).
-//         const transactions = await Transaction.findAll({
-//             where: { UserId: userId },
-//             include: Category, // Include category details for better context
-//             order: [['transactionDate', 'DESC']],
-//             limit: 50 // Limit context to recent transactions to avoid overly long prompts
-//         });
-
-//         if (transactions.length === 0) {
-//             return res.json({ response: "I don't have any transaction data to analyze yet. Please add some transactions first!" });
-//         }
-
-//         // Step 2: Augment the data into a clean text context for the LLM.
-//         const context = "User's recent transactions:\n" + transactions.map(t => 
-//             `- Date: ${t.transactionDate}, Description: ${t.description}, Amount: ${t.amount}, Category: ${t.Category.name} (${t.Category.type})`
-//         ).join('\n');
-
-//         // Step 3: Generate a response with a carefully engineered prompt.
-//         const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-//         const prompt = `You are a helpful and concise personal finance assistant. Analyze the following user transaction data to answer their question. Provide actionable insights but do not give financial advice. Base your answer ONLY on the data provided.
-
-//         --- TRANSACTION DATA ---
-//         ${context}
-//         ------------------------
-
-//         USER QUESTION: "${query}"
-
-//         YOUR ANALYSIS:`;
-
-//         const result = await model.generateContent(prompt);
-//         const response = await result.response;
-//         const text = response.text();
-
-//         res.json({ response: text });
-//     } catch (error) {
-//         console.error("AI chat error:", error);
-//         res.status(500).json({ error: "Failed to get AI response." });
-//     }
-// });
-
-// In backend/server.js, REPLACE your entire AI Chat route with this one:
-
-// --- AI Financial Coach Route (CORRECTED) ---
-// In backend/server.js, REPLACE your entire AI Chat route with this one:
-
-// --- AI Financial Coach Route (CORRECTED) ---
 app.post("/api/ai/chat", authenticateToken, async (req, res) => {
-    const { query } = req.body;
-    if (!query) {
-        return res.status(400).json({ error: "Query is required." });
+  const { query } = req.body;
+  if (!query) {
+    return res.status(400).json({ error: "Query is required." });
+  }
+  const userId = req.user.id;
+
+  try {
+    const transactions = await Transaction.findAll({
+      where: { UserId: userId },
+      include: Category,
+      order: [["transactionDate", "DESC"]],
+      limit: 50,
+    });
+
+    if (transactions.length === 0) {
+      return res.json({
+        response:
+          "I don't have any transaction data to analyze yet. Please add some transactions first!",
+      });
     }
-    const userId = req.user.id;
 
-    try {
-        const transactions = await Transaction.findAll({
-            where: { UserId: userId },
-            include: Category,
-            order: [['transactionDate', 'DESC']],
-            limit: 50
-        });
+    const context =
+      "User's recent transactions:\n" +
+      transactions
+        .map((t) => {
+          const categoryName = t.Category?.name ?? "Uncategorized";
+          const categoryType = t.Category?.type ?? "expense";
 
-        if (transactions.length === 0) {
-            return res.json({ response: "I don't have any transaction data to analyze yet. Please add some transactions first!" });
-        }
+          return `- Date: ${t.transactionDate}, Description: ${t.description}, Amount: ${t.amount}, Category: ${categoryName} (${categoryType})`;
+        })
+        .join("\n");
 
-        // --- THIS IS THE FIX ---
-        // This makes the code robust by safely handling transactions that might not have a category.
-        const context = "User's recent transactions:\n" + transactions.map(t => {
-            // Use optional chaining (?.) to safely access category properties.
-            // Use the nullish coalescing operator (??) to provide a default fallback value.
-            const categoryName = t.Category?.name ?? 'Uncategorized';
-            const categoryType = t.Category?.type ?? 'expense';
-            
-            return `- Date: ${t.transactionDate}, Description: ${t.description}, Amount: ${t.amount}, Category: ${categoryName} (${categoryType})`;
-        }).join('\n');
-        // --- END OF FIX ---
-
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
-        const prompt = `You are a helpful and concise personal finance assistant. Analyze the following user transaction data to answer their question. Provide actionable insights but do not give financial advice. Base your answer ONLY on the data provided.
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    const prompt = `You are a helpful and concise personal finance assistant. Analyze the following user transaction data to answer their question. Provide actionable insights but do not give financial advice. Base your answer ONLY on the data provided.
 
         --- TRANSACTION DATA ---
         ${context}
@@ -540,15 +467,15 @@ app.post("/api/ai/chat", authenticateToken, async (req, res) => {
 
         YOUR ANALYSIS:`;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-        res.json({ response: text });
-    } catch (error) {
-        console.error("AI chat error:", error);
-        res.status(500).json({ error: "Failed to get AI response." });
-    }
+    res.json({ response: text });
+  } catch (error) {
+    console.error("AI chat error:", error);
+    res.status(500).json({ error: "Failed to get AI response." });
+  }
 });
 
 /**
@@ -564,7 +491,6 @@ const parseReceiptText = (text) => {
 
   const lines = text.split("\n");
 
-  // 1. Find Merchant (heuristic: usually one of the first few non-empty lines)
   for (const line of lines) {
     if (line.trim().length > 0) {
       merchant = line.trim();
@@ -572,13 +498,11 @@ const parseReceiptText = (text) => {
     }
   }
 
-  // 2. Find Total (using regex to find common patterns like "Total", "TOTAL", etc.)
   const totalRegex = /(?:total|amount|due|balance)[\s:]*[$€£]?\s*(\d+\.\d{2})/i;
   const totalMatch = text.match(totalRegex);
   if (totalMatch && totalMatch[1]) {
     total = parseFloat(totalMatch[1]);
   } else {
-    // Fallback: Find the largest number with a decimal, assuming it's the total.
     const numbers = text.match(/\d+\.\d{2}/g) || [];
     const amounts = numbers.map(parseFloat);
     if (amounts.length > 0) {
@@ -586,18 +510,15 @@ const parseReceiptText = (text) => {
     }
   }
 
-  // 3. Find Date (using regex for common formats like MM/DD/YYYY, YYYY-MM-DD)
   const dateRegex = /(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})|(\d{4}-\d{2}-\d{2})/;
   const dateMatch = text.match(dateRegex);
   if (dateMatch && (dateMatch[1] || dateMatch[2])) {
-    // Attempt to create a valid date object to standardize the format
     const parsedDate = new Date(dateMatch[1] || dateMatch[2]);
     if (!isNaN(parsedDate)) {
       date = parsedDate.toISOString().slice(0, 10);
     }
   }
 
-  // If no date was found, default to today's date
   if (!date) {
     date = new Date().toISOString().slice(0, 10);
   }
@@ -605,29 +526,24 @@ const parseReceiptText = (text) => {
   return { merchant, total, date };
 };
 
-
-// --- UPDATED OCR Route ---
 app.post(
   "/api/upload/receipt",
   authenticateToken,
   upload.single("receipt"),
   async (req, res) => {
-    req.setTimeout(300000); // Keep the 5-minute timeout
+    req.setTimeout(300000);
 
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded." });
     }
 
-    let worker; // Define worker here to access it in the finally block
+    let worker;
 
     try {
       console.log(
         `Processing file: ${req.file.originalname} with Tesseract.js...`,
       );
 
-      // *** THIS IS THE FIX ***
-      // The new API combines worker creation, language loading, and initialization.
-      // Replace the old three lines with this single line.
       worker = await Tesseract.createWorker("eng");
 
       await worker.setParameters({
@@ -655,7 +571,6 @@ app.post(
         });
       }
     } finally {
-      // Terminate the worker if it was created
       if (worker) {
         await worker.terminate();
       }
@@ -663,79 +578,46 @@ app.post(
   },
 );
 
-// --- Analytics Route (unchanged) ---
-// app.get("/api/analytics/summary", authenticateToken, async (req, res) => {
-//   try {
-//     const expensesByCategory = await Transaction.findAll({
-//       attributes: [
-//         [Sequelize.col("Category.name"), "category"],
-//         [Sequelize.fn("SUM", Sequelize.col("amount")), "total"],
-//       ],
-//       include: [
-//         {
-//           model: Category,
-//           attributes: [],
-//           where: { type: "expense" },
-//         },
-//       ],
-//       where: { UserId: req.user.id },
-//       group: ["Category.name"],
-//       raw: true,
-//     });
-
-//     res.json({ expensesByCategory });
-//   } catch (error) {
-//     res.status(500).json({
-//       message: "Error fetching analytics summary",
-//       error: error.message,
-//     });
-//   }
-// });
-
-// and REPLACE it with this more powerful version:
-
 app.get("/api/analytics/summary", authenticateToken, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const userId = req.user.id;
 
-    // Build the date filter if dates are provided
     let dateFilter = {};
     if (startDate && endDate) {
       dateFilter.transactionDate = { [Op.between]: [startDate, endDate] };
     }
 
-    // 1. Expenses by Category (Your existing query, now with date filtering)
     const expensesByCategory = await Transaction.findAll({
       attributes: [
         [Sequelize.col("Category.name"), "category"],
         [Sequelize.fn("SUM", Sequelize.col("amount")), "total"],
       ],
-      include: [{ model: Category, attributes: [], where: { type: "expense" } }],
+      include: [
+        { model: Category, attributes: [], where: { type: "expense" } },
+      ],
       where: { UserId: userId, ...dateFilter },
       group: ["Category.name"],
       raw: true,
     });
 
-    // 2. NEW: Income vs Expense data (for a Bar Chart)
     const incomeVsExpense = await Transaction.findAll({
-        where: { UserId: userId, ...dateFilter },
-        attributes: [
-            // We need to get the 'type' from the associated Category
-            [Sequelize.col("Category.type"), "type"],
-            [Sequelize.fn("SUM", Sequelize.col("amount")), "totalAmount"],
-        ],
-        include: [{ model: Category, attributes: [] }],
-        group: [Sequelize.col("Category.type")],
-        raw: true
+      where: { UserId: userId, ...dateFilter },
+      attributes: [
+        [Sequelize.col("Category.type"), "type"],
+        [Sequelize.fn("SUM", Sequelize.col("amount")), "totalAmount"],
+      ],
+      include: [{ model: Category, attributes: [] }],
+      group: [Sequelize.col("Category.type")],
+      raw: true,
     });
 
-    // 3. NEW: Expenses Over Time (for a Line Chart)
     const expensesOverTime = await Transaction.findAll({
       where: { UserId: userId, ...dateFilter },
-      include: [{ model: Category, attributes: [], where: { type: 'expense' } }],
+      include: [
+        { model: Category, attributes: [], where: { type: "expense" } },
+      ],
       attributes: [
-        // Use DATE for SQLite compatibility to group by day
         [Sequelize.fn("DATE", Sequelize.col("transactionDate")), "date"],
         [Sequelize.fn("SUM", Sequelize.col("amount")), "totalAmount"],
       ],
@@ -753,9 +635,6 @@ app.get("/api/analytics/summary", authenticateToken, async (req, res) => {
   }
 });
 
-// =================================================================
-// 6. SERVER STARTUP
-// =================================================================
 const startServer = async () => {
   try {
     await sequelize.sync();

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
   Avatar,
@@ -7,22 +7,54 @@ import {
   Box,
   Typography,
   Container,
+  Alert,
+  IconButton,
 } from "@mui/material";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { useTheme } from "@mui/material/styles";
+import { ThemeContext } from "../context/ThemeContext";
+import Brightness4Icon from "@mui/icons-material/Brightness4";
+import Brightness7Icon from "@mui/icons-material/Brightness7";
 
 export default function Login() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-  const handleSubmit = (event) => {
+  const location = useLocation();
+  const successMessage = location.state?.message;
+
+  const theme = useTheme();
+  const { toggleColorMode } = useContext(ThemeContext);
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    login(email, password);
+    setError("");
+    try {
+      await login(email, password);
+    } catch (err) {
+      const errorMessage =
+        err.response?.data?.message ||
+        "Failed to sign in. Please check your credentials.";
+      setError(errorMessage);
+      console.error(err);
+    }
   };
 
   return (
     <Container component="main" maxWidth="xs">
+      <Box sx={{ position: "absolute", top: 16, right: 16 }}>
+        <IconButton onClick={toggleColorMode} color="inherit">
+          {theme.palette.mode === "dark" ? (
+            <Brightness7Icon />
+          ) : (
+            <Brightness4Icon />
+          )}
+        </IconButton>
+      </Box>
+
       <Box
         sx={{
           marginTop: 8,
@@ -37,6 +69,18 @@ export default function Login() {
         <Typography component="h1" variant="h5">
           Sign in
         </Typography>
+
+        {successMessage && !error && (
+          <Alert severity="success" sx={{ mt: 2, width: "100%" }}>
+            {successMessage}
+          </Alert>
+        )}
+        {error && (
+          <Alert severity="error" sx={{ mt: 2, width: "100%" }}>
+            {error}
+          </Alert>
+        )}
+
         <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
           <TextField
             margin="normal"

@@ -26,6 +26,9 @@ export const login = (credentials) => api.post("/auth/login", credentials);
 export const getCategories = () => api.get("/categories");
 export const createCategory = (categoryData) =>
   api.post("/categories", categoryData);
+export const updateCategory = (id, categoryData) =>
+  api.put(`/categories/${id}`, categoryData);
+export const deleteCategory = (id) => api.delete(`/categories/${id}`);
 
 // Transactions
 export const getTransactions = (params) => api.get("/transactions", { params });
@@ -36,20 +39,21 @@ export const uploadReceipt = (formData) =>
     headers: { "Content-Type": "multipart/form-data" },
   });
 
-
-export const uploadPdf = (formData) => api.post('/transactions/upload-pdf', formData);
+export const uploadPdf = (formData) =>
+  api.post("/transactions/upload-pdf", formData);
 
 // Add these to frontend/src/api/index.js
-export const updateTransaction = (id, transactionData) => api.put(`/transactions/${id}`, transactionData);
+export const updateTransaction = (id, transactionData) =>
+  api.put(`/transactions/${id}`, transactionData);
 export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);
 
-export const postAiChat = (query) => api.post('/ai/chat', { query });
-
+export const postAiChat = (query) => api.post("/ai/chat", { query });
 
 // Analytics
 // export const getAnalyticsSummary = () => api.get("/analytics/summary");
 
 // Analytics
-export const getAnalyticsSummary = (params) => api.get("/analytics/summary", { params }); // Pass params
+export const getAnalyticsSummary = (params) =>
+  api.get("/analytics/summary", { params }); // Pass params
 
 export default api;

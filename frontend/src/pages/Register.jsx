@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { register } from "../api";
 import {
@@ -8,8 +8,14 @@ import {
   Box,
   Typography,
   Container,
+  Alert,
+  IconButton,
 } from "@mui/material";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import { useTheme } from "@mui/material/styles";
+import { ThemeContext } from "../context/ThemeContext";
+import Brightness4Icon from "@mui/icons-material/Brightness4";
+import Brightness7Icon from "@mui/icons-material/Brightness7";
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -17,19 +23,38 @@ export default function Register() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
+  const theme = useTheme();
+  const { toggleColorMode } = useContext(ThemeContext);
+
   const handleSubmit = async (event) => {
     event.preventDefault();
+    setError("");
     try {
       await register({ email, password });
-      navigate("/login"); // Redirect to login page after successful registration
+      navigate("/login", {
+        state: { message: "Registration successful! Please sign in." },
+      });
     } catch (err) {
-      setError("Failed to register. The email might already be in use.");
+      const errorMessage =
+        err.response?.data?.message ||
+        "Failed to register. The email might already be in use.";
+      setError(errorMessage);
       console.error(err);
     }
   };
 
   return (
     <Container component="main" maxWidth="xs">
+      <Box sx={{ position: "absolute", top: 16, right: 16 }}>
+        <IconButton onClick={toggleColorMode} color="inherit">
+          {theme.palette.mode === "dark" ? (
+            <Brightness7Icon />
+          ) : (
+            <Brightness4Icon />
+          )}
+        </IconButton>
+      </Box>
+
       <Box
         sx={{
           marginTop: 8,
@@ -44,11 +69,13 @@ export default function Register() {
         <Typography component="h1" variant="h5">
           Sign up
         </Typography>
+
         {error && (
-          <Typography color="error" sx={{ mt: 2 }}>
+          <Alert severity="error" sx={{ mt: 2, width: "100%" }}>
             {error}
-          </Typography>
+          </Alert>
         )}
+
         <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
           <TextField
             margin="normal"

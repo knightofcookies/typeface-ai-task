@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
       navigate("/dashboard");
     } catch (error) {
       console.error("Login failed:", error);
-      // You can add state here to show an error message to the user
+      throw error;
     }
   };
 

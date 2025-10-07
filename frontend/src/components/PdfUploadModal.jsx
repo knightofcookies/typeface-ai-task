@@ -1,7 +1,12 @@
-// frontend/src/components/PdfUploadModal.jsx
-import React, { useState } from 'react';
-import { Modal, Box, Typography, Button, CircularProgress } from '@mui/material';
-import { uploadPdf } from '../api'; // You will add this to api/index.js
+import React, { useState } from "react";
+import {
+  Modal,
+  Box,
+  Typography,
+  Button,
+  CircularProgress,
+} from "@mui/material";
+import { uploadPdf } from "../api";
 
 const style = {
   position: "absolute",
@@ -29,11 +34,11 @@ export default function PdfUploadModal({ open, onClose, onSuccess }) {
     if (!file) return;
     setLoading(true);
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
     try {
       const response = await uploadPdf(formData);
       setResult(response.data);
-      onSuccess(); // Refresh transactions list
+      onSuccess();
     } catch (err) {
       console.error("PDF upload failed", err);
       setResult({ error: "Failed to process PDF." });
@@ -51,14 +56,23 @@ export default function PdfUploadModal({ open, onClose, onSuccess }) {
           <input type="file" hidden accept=".pdf" onChange={handleFileChange} />
         </Button>
         {file && <Typography>{file.name}</Typography>}
-        <Button onClick={handleSubmit} disabled={!file || loading} fullWidth variant="contained">
-          {loading ? <CircularProgress size={24} /> : 'Upload and Import'}
+        <Button
+          onClick={handleSubmit}
+          disabled={!file || loading}
+          fullWidth
+          variant="contained"
+        >
+          {loading ? <CircularProgress size={24} /> : "Upload and Import"}
         </Button>
         {result && (
           <Box sx={{ mt: 2 }}>
             <Typography>{result.message || result.error}</Typography>
-            {result.imported !== undefined && <Typography>Imported: {result.imported}</Typography>}
-            {result.duplicates !== undefined && <Typography>Duplicates Found: {result.duplicates}</Typography>}
+            {result.imported !== undefined && (
+              <Typography>Imported: {result.imported}</Typography>
+            )}
+            {result.duplicates !== undefined && (
+              <Typography>Duplicates Found: {result.duplicates}</Typography>
+            )}
           </Box>
         )}
       </Box>
