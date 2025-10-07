@@ -15,6 +15,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const pg = require("pg");
 
 app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());
@@ -29,6 +30,7 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
     },
   },
   logging: false,
+  dialectModule: pg,
 });
 
 const User = sequelize.define("User", {
