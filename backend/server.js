@@ -671,4 +671,6 @@ const startServer = async () => {
   }
 };
 
-startServer();
+// startServer();
+
+module.exports = app;
