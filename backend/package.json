@@ -22,6 +22,7 @@
     "multer": "^2.0.2",
     "nodemon": "^3.1.10",
     "pdf.js-extract": "^0.2.1",
+    "pg": "^8.16.3",
     "sequelize": "^6.37.7",
     "sqlite3": "^5.1.7",
     "tesseract.js": "^6.0.1"

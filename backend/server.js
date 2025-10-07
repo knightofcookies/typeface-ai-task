@@ -19,7 +19,17 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());
 
-const sequelize = new Sequelize("sqlite://money.db");
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: "postgres",
+  protocol: "postgres",
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false, // For cloud database connections
+    },
+  },
+  logging: false,
+});
 
 const User = sequelize.define("User", {
   email: {
