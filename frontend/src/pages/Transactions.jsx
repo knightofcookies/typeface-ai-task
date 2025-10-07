@@ -8,32 +8,56 @@ import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import CategoryIcon from "@mui/icons-material/Category";
 import TransactionForm from "../components/TransactionForm";
 import CategoryForm from "../components/CategoryForm";
+import PdfUploadModal from '../components/PdfUploadModal'; // Import the new component
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'; // Import an icon
+import IconButton from '@mui/material/IconButton';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { deleteTransaction } from '../api'; // Import the delete function
 
-const columns = [
-  { field: "transactionDate", headerName: "Date", width: 150 },
-  { field: "description", headerName: "Description", width: 250 },
-  { field: "amount", headerName: "Amount", width: 150, type: "number" },
-  {
-    // A unique field is still required for the column ID.
-    field: "categoryName",
-    headerName: "Category",
-    width: 200,
-    // Define the function to capture the arguments correctly.
-    // The first is 'value', the second is 'row'. We only need 'row'.
-    valueGetter: (value, row) => {
-      return row.Category?.name || "N/A";
-    },
-  },
-  {
-    field: "categoryType",
-    headerName: "Type",
-    width: 150,
-    // Same signature here.
-    valueGetter: (value, row) => {
-      return row.Category?.type || "N/A";
-    },
-  },
-];
+// const columns = [
+//   { field: "transactionDate", headerName: "Date", width: 150 },
+//   { field: "description", headerName: "Description", width: 250 },
+//   { field: "amount", headerName: "Amount", width: 150, type: "number" },
+//   {
+//     // A unique field is still required for the column ID.
+//     field: "categoryName",
+//     headerName: "Category",
+//     width: 200,
+//     // Define the function to capture the arguments correctly.
+//     // The first is 'value', the second is 'row'. We only need 'row'.
+//     valueGetter: (value, row) => {
+//       return row.Category?.name || "N/A";
+//     },
+//   },
+//   {
+//     field: "categoryType",
+//     headerName: "Type",
+//     width: 150,
+//     // Same signature here.
+//     valueGetter: (value, row) => {
+//       return row.Category?.type || "N/A";
+//     },
+//   },
+//   {
+//     field: 'actions',
+//     headerName: 'Actions',
+//     sortable: false,
+//     width: 100,
+//     renderCell: (params) => (
+//       <>
+//         <IconButton 
+//           onClick={() => { /* Logic to open edit modal will go here */ }}
+//         >
+//           <EditIcon />
+//         </IconButton>
+//         <IconButton onClick={() => handleDelete(params.row.id)}>
+//           <DeleteIcon />
+//         </IconButton>
+//       </>
+//     ),
+//   },
+// ];
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState([]);
@@ -45,6 +69,8 @@ export default function Transactions() {
   const [loading, setLoading] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState(null);
 
   // Use useCallback to memoize the fetch function.
   const fetchTransactions = useCallback(async () => {
@@ -68,7 +94,72 @@ export default function Transactions() {
     fetchTransactions();
   }, [fetchTransactions]);
 
-  const handleCategorySuccess = () => {
+  // const handleDelete = async (id) => {
+  //   if (window.confirm('Are you sure you want to delete this transaction?')) {
+  //       try {
+  //           await deleteTransaction(id);
+  //           fetchTransactions(); // Re-fetch data to update the grid
+  //       } catch (error) {
+  //           console.error('Failed to delete transaction', error);
+  //           alert('Failed to delete transaction.');
+  //       }
+  //   }
+  // };
+
+  const handleEdit = (transaction) => {
+    setEditingTransaction(transaction); // Store the transaction to be edited
+    setIsTransactionModalOpen(true);    // Open the modal
+  };
+
+  const handleDelete = async (id) => {
+        if (window.confirm('Are you sure you want to delete this transaction?')) {
+            try {
+                await deleteTransaction(id);
+                fetchTransactions(); // Re-fetch data to update the grid
+            } catch (error) {
+                console.error('Failed to delete transaction', error);
+                alert('Failed to delete transaction.');
+            }
+        }
+    };
+  
+    const columns = [
+        { field: "transactionDate", headerName: "Date", width: 150 },
+        { field: "description", headerName: "Description", width: 250 },
+        { field: "amount", headerName: "Amount", width: 150, type: "number" },
+        {
+            field: "categoryName",
+            headerName: "Category",
+            width: 200,
+            valueGetter: (value, row) => row.Category?.name || "N/A",
+        },
+        {
+            field: "categoryType",
+            headerName: "Type",
+            width: 150,
+            valueGetter: (value, row) => row.Category?.type || "N/A",
+        },
+        {
+            field: 'actions',
+            headerName: 'Actions',
+            sortable: false,
+            width: 120,
+            renderCell: (params) => (
+              <Box>
+                <IconButton 
+                  onClick={() => handleEdit(params.row)} // <-- We will implement handleEdit next
+                >
+                  <EditIcon />
+                </IconButton>
+                <IconButton onClick={() => handleDelete(params.row.id)}>
+                  <DeleteIcon />
+                </IconButton>
+              </Box>
+            ),
+        },
+    ];
+
+   const handleCategorySuccess = () => {
     alert("Category created successfully!");
   };
 
@@ -102,6 +193,14 @@ export default function Transactions() {
           >
             Add Transaction
           </Button>
+          <Button
+            variant="outlined"
+            startIcon={<PictureAsPdfIcon />}
+            onClick={() => setIsPdfModalOpen(true)}
+            sx={{ mr: 2 }}
+        >
+            Import PDF
+        </Button>
         </Box>
       </Box>
       <Box sx={{ height: 600, width: "100%" }}>
@@ -128,6 +227,23 @@ export default function Transactions() {
         onClose={() => setIsCategoryModalOpen(false)}
         onSuccess={handleCategorySuccess}
       />
+
+      <PdfUploadModal
+        open={isPdfModalOpen}
+        onClose={() => setIsPdfModalOpen(false)}
+        onSuccess={fetchTransactions}
+      />
+
+      <TransactionForm
+        open={isTransactionModalOpen}
+        onClose={() => {
+            setIsTransactionModalOpen(false);
+            setEditingTransaction(null); // Clear the editing state when modal closes
+        }}
+        onSuccess={fetchTransactions}
+        // Pass the transaction to be edited to the form
+        transactionToEdit={editingTransaction} 
+    />
     </Paper>
   );
 }

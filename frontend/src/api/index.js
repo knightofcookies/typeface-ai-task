@@ -36,7 +36,20 @@ export const uploadReceipt = (formData) =>
     headers: { "Content-Type": "multipart/form-data" },
   });
 
+
+export const uploadPdf = (formData) => api.post('/transactions/upload-pdf', formData);
+
+// Add these to frontend/src/api/index.js
+export const updateTransaction = (id, transactionData) => api.put(`/transactions/${id}`, transactionData);
+export const deleteTransaction = (id) => api.delete(`/transactions/${id}`);
+
+export const postAiChat = (query) => api.post('/ai/chat', { query });
+
+
 // Analytics
-export const getAnalyticsSummary = () => api.get("/analytics/summary");
+// export const getAnalyticsSummary = () => api.get("/analytics/summary");
+
+// Analytics
+export const getAnalyticsSummary = (params) => api.get("/analytics/summary", { params }); // Pass params
 
 export default api;

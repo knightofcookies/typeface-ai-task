@@ -11,8 +11,9 @@ import {
   MenuItem,
   Input,
 } from "@mui/material";
-import { getCategories, createTransaction, uploadReceipt } from "../api";
+import { getCategories, createTransaction, uploadReceipt, updateTransaction } from "../api";
 import dayjs from "dayjs";
+
 
 const style = {
   position: "absolute",
@@ -26,7 +27,7 @@ const style = {
   p: 4,
 };
 
-export default function TransactionForm({ open, onClose, onSuccess }) {
+export default function TransactionForm({ open, onClose, onSuccess, transactionToEdit }) {
   const [categories, setCategories] = useState([]);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -36,19 +37,34 @@ export default function TransactionForm({ open, onClose, onSuccess }) {
   );
   const [selectedFile, setSelectedFile] = useState(null);
 
+  // useEffect(() => {
+  //   if (open) {
+  //     const fetchCategories = async () => {
+  //       try {
+  //         const response = await getCategories();
+  //         setCategories(response.data);
+  //       } catch (error) {
+  //         console.error("Failed to fetch categories", error);
+  //       }
+  //     };
+  //     fetchCategories();
+  //   }
+  // }, [open]);
+
   useEffect(() => {
-    if (open) {
-      const fetchCategories = async () => {
-        try {
-          const response = await getCategories();
-          setCategories(response.data);
-        } catch (error) {
-          console.error("Failed to fetch categories", error);
+        if (transactionToEdit) {
+            setDescription(transactionToEdit.description || '');
+            setAmount(transactionToEdit.amount || '');
+            setTransactionDate(dayjs(transactionToEdit.transactionDate).format('YYYY-MM-DD'));
+            setCategoryId(transactionToEdit.CategoryId || '');
+        } else {
+            // Reset the form if we are in "create" mode
+            setDescription('');
+            setAmount('');
+            setTransactionDate(dayjs().format('YYYY-MM-DD'));
+            setCategoryId('');
         }
-      };
-      fetchCategories();
-    }
-  }, [open]);
+    }, [transactionToEdit, open]); // Re-run when transactionToEdit or open status changes
 
   const handleFileChange = async (event) => {
     const file = event.target.files[0];
@@ -70,36 +86,68 @@ export default function TransactionForm({ open, onClose, onSuccess }) {
     }
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (!categoryId) {
-      alert("Please select a category.");
-      return; // Stop the submission
-    }
-    try {
-      await createTransaction({
-        description,
-        amount,
-        transactionDate,
-        categoryId,
-      });
-      onSuccess(); // Callback to refresh data on parent component
-      onClose(); // Close modal
-      // Reset form state
-      setDescription("");
-      setAmount("");
-      setCategoryId("");
-    } catch (error) {
-      console.error("Failed to create transaction", error);
-    }
-  };
+  // const handleSubmit = async (event) => {
+  //   event.preventDefault();
+  //   if (!categoryId) {
+  //     alert("Please select a category.");
+  //     return; // Stop the submission
+  //   }
+  //   try {
+  //     await createTransaction({
+  //       description,
+  //       amount,
+  //       transactionDate,
+  //       categoryId,
+  //     });
+  //     onSuccess(); // Callback to refresh data on parent component
+  //     onClose(); // Close modal
+  //     // Reset form state
+  //     setDescription("");
+  //     setAmount("");
+  //     setCategoryId("");
+  //   } catch (error) {
+  //     console.error("Failed to create transaction", error);
+  //   }
+  // };
+
+     const handleSubmit = async (event) => {
+        event.preventDefault();
+        if (!categoryId) {
+          alert("Please select a category.");
+          return;
+        }
+
+        const transactionData = {
+            description,
+            amount,
+            transactionDate,
+            categoryId,
+        };
+
+        try {
+            if (transactionToEdit) {
+                // If we are editing, call the update API
+                await updateTransaction(transactionToEdit.id, transactionData);
+            } else {
+                // Otherwise, call the create API
+                await createTransaction(transactionData);
+            }
+            onSuccess(); // Callback to refresh data
+            onClose();   // Close modal
+        } catch (error) {
+            console.error("Failed to save transaction", error);
+            alert("Failed to save transaction.");
+        }
+    };
 
   return (
     <Modal open={open} onClose={onClose}>
       <Box sx={style} component="form" onSubmit={handleSubmit}>
         <Typography variant="h6" component="h2">
-          Add New Transaction
+          {/* Dynamically change the title */}
+          {transactionToEdit ? 'Edit Transaction' : 'Add New Transaction'}
         </Typography>
+
 
         <Box sx={{ my: 2 }}>
           <Button variant="contained" component="label">
@@ -155,8 +203,10 @@ export default function TransactionForm({ open, onClose, onSuccess }) {
           </Select>
         </FormControl>
         <Button type="submit" fullWidth variant="contained" sx={{ mt: 2 }}>
-          Save Transaction
+         {/* Dynamically change the button text */}
+         {transactionToEdit ? 'Save Changes' : 'Save Transaction'}
         </Button>
+
       </Box>
     </Modal>
   );
