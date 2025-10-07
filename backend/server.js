@@ -9,6 +9,7 @@ const Tesseract = require("tesseract.js");
 const dayjs = require("dayjs");
 const pdf = require("pdf-parse");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -633,6 +634,12 @@ app.get("/api/analytics/summary", authenticateToken, async (req, res) => {
       error: error.message,
     });
   }
+});
+
+app.use(express.static(path.join(__dirname, "dist")));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "frontend", "dist", "index.html"));
 });
 
 const startServer = async () => {
